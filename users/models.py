@@ -5,6 +5,20 @@ from django.core.files.base import ContentFile
 from django.db import models
 from PIL import Image, ImageDraw, ImageFont
 
+from common.constants import (
+    AVATAR_COLORS,
+    AVATAR_FONT_NAME,
+    AVATAR_FONT_SIZE_RATIO,
+    AVATAR_FORMAT,
+    AVATAR_MODE,
+    AVATAR_SIZE,
+    AVATAR_TEXT_COLOR,
+    USER_ABOUT_MAX_LENGTH,
+    USER_NAME_MAX_LENGTH,
+    USER_PHONE_MAX_LENGTH,
+    USER_SURNAME_MAX_LENGTH,
+)
+
 from .managers import UserManager
 
 
@@ -14,12 +28,18 @@ def avatar_path(instance, filename):
 
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField("email", unique=True)
-    name = models.CharField("имя", max_length=124)
-    surname = models.CharField("фамилия", max_length=124)
+    name = models.CharField("имя", max_length=USER_NAME_MAX_LENGTH)
+    surname = models.CharField("фамилия", max_length=USER_SURNAME_MAX_LENGTH)
     avatar = models.ImageField("аватар", upload_to=avatar_path, blank=True)
-    phone = models.CharField("телефон", max_length=12, unique=True, blank=True, null=True)
+    phone = models.CharField(
+        "телефон",
+        max_length=USER_PHONE_MAX_LENGTH,
+        unique=True,
+        blank=True,
+        null=True,
+    )
     github_url = models.URLField("GitHub", blank=True)
-    about = models.TextField("о себе", max_length=256, blank=True)
+    about = models.TextField("о себе", max_length=USER_ABOUT_MAX_LENGTH, blank=True)
     favorites = models.ManyToManyField(
         "projects.Project",
         blank=True,
@@ -36,7 +56,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = ["name", "surname"]
 
     class Meta:
-        ordering = ["id"]
+        ordering = ["-date_joined"]
         verbose_name = "пользователь"
         verbose_name_plural = "пользователи"
 
@@ -56,24 +76,26 @@ class User(AbstractBaseUser, PermissionsMixin):
             super().save(update_fields=["avatar"])
 
     def _build_avatar_file(self):
-        palette = ["#8FAADC", "#93C47D", "#F6B26B", "#C9A0DC", "#76A5AF"]
-        color = palette[self.pk % len(palette)]
+        color = AVATAR_COLORS[self.pk % len(AVATAR_COLORS)]
         letter = (self.name[:1] or self.email[:1] or "?").upper()
 
-        image = Image.new("RGB", (256, 256), color)
+        image = Image.new(AVATAR_MODE, (AVATAR_SIZE, AVATAR_SIZE), color)
         drawer = ImageDraw.Draw(image)
+        font_size = int(AVATAR_SIZE * AVATAR_FONT_SIZE_RATIO)
 
         try:
-            font = ImageFont.truetype("arial.ttf", 132)
+            font = ImageFont.truetype(AVATAR_FONT_NAME, font_size)
         except OSError:
-            font = ImageFont.load_default()
+            font = ImageFont.load_default(size=font_size)
 
         box = drawer.textbbox((0, 0), letter, font=font)
-        x = (256 - (box[2] - box[0])) / 2
-        y = (256 - (box[3] - box[1])) / 2 - 8
-        drawer.text((x, y), letter, fill="#FFFFFF", font=font)
+        text_width = box[2] - box[0]
+        text_height = box[3] - box[1]
+        x = (AVATAR_SIZE - text_width) / 2 - box[0]
+        y = (AVATAR_SIZE - text_height) / 2 - box[1]
+        drawer.text((x, y), letter, fill=AVATAR_TEXT_COLOR, font=font)
 
         output = BytesIO()
-        image.save(output, format="PNG")
+        image.save(output, format=AVATAR_FORMAT)
         return ContentFile(output.getvalue())
 

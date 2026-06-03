@@ -1,16 +1,23 @@
 from django.conf import settings
 from django.db import models
 
+from common.constants import (
+    PROJECT_NAME_MAX_LENGTH,
+    PROJECT_STATUS_CLOSED,
+    PROJECT_STATUS_MAX_LENGTH,
+    PROJECT_STATUS_OPEN,
+)
+
 
 class Project(models.Model):
-    OPEN = "open"
-    CLOSED = "closed"
+    OPEN = PROJECT_STATUS_OPEN
+    CLOSED = PROJECT_STATUS_CLOSED
     STATUS_CHOICES = (
         (OPEN, "Open"),
         (CLOSED, "Closed"),
     )
 
-    name = models.CharField("название", max_length=200)
+    name = models.CharField("название", max_length=PROJECT_NAME_MAX_LENGTH)
     description = models.TextField("описание", blank=True)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -22,7 +29,7 @@ class Project(models.Model):
     github_url = models.URLField("GitHub", blank=True)
     status = models.CharField(
         "статус",
-        max_length=6,
+        max_length=PROJECT_STATUS_MAX_LENGTH,
         choices=STATUS_CHOICES,
         default=OPEN,
     )

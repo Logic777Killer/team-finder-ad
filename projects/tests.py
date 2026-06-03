@@ -1,10 +1,11 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import Project
 
 
+@override_settings(ALLOWED_HOSTS=["testserver"])
 class ProjectFlowTests(TestCase):
     def setUp(self):
         User = get_user_model()

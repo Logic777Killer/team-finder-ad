@@ -1,30 +1,17 @@
-import re
-
 from django import forms
 from django.contrib.auth import authenticate
-from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth.forms import PasswordChangeForm, ReadOnlyPasswordHashField
 
+from common.constants import USER_NAME_MAX_LENGTH, USER_SURNAME_MAX_LENGTH
 from common.forms import validate_github_url
 
 from .models import User
-
-
-PHONE_RE = re.compile(r"^(?:8|\+7)\d{10}$")
-
-
-def normalize_phone(value):
-    if not value:
-        return None
-
-    phone = value.strip().replace(" ", "").replace("-", "")
-    if phone.startswith("8"):
-        return "+7" + phone[1:]
-    return phone
+from .services import is_valid_phone, normalize_phone
 
 
 class RegisterForm(forms.Form):
-    name = forms.CharField(label="Имя", max_length=124)
-    surname = forms.CharField(label="Фамилия", max_length=124)
+    name = forms.CharField(label="Имя", max_length=USER_NAME_MAX_LENGTH)
+    surname = forms.CharField(label="Фамилия", max_length=USER_SURNAME_MAX_LENGTH)
     email = forms.EmailField(label="Email")
     password = forms.CharField(label="Пароль", widget=forms.PasswordInput)
 
@@ -68,14 +55,6 @@ class ProfileForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ["name", "surname", "avatar", "about", "phone", "github_url"]
-        labels = {
-            "name": "Имя",
-            "surname": "Фамилия",
-            "avatar": "Аватар",
-            "about": "О себе",
-            "phone": "Телефон",
-            "github_url": "GitHub",
-        }
         widgets = {
             "about": forms.Textarea(attrs={"rows": 4}),
         }
@@ -85,11 +64,10 @@ class ProfileForm(forms.ModelForm):
         if not raw_phone:
             return None
 
-        compact = raw_phone.strip().replace(" ", "").replace("-", "")
-        if not PHONE_RE.match(compact):
+        if not is_valid_phone(raw_phone):
             raise forms.ValidationError("Телефон должен быть в формате 8XXXXXXXXXX или +7XXXXXXXXXX.")
 
-        normalized = normalize_phone(compact)
+        normalized = normalize_phone(raw_phone)
         duplicate = User.objects.filter(phone=normalized)
         if self.instance.pk:
             duplicate = duplicate.exclude(pk=self.instance.pk)
@@ -107,4 +85,43 @@ class ProfileForm(forms.ModelForm):
 
 class UserPasswordChangeForm(PasswordChangeForm):
     pass
+
+
+class AdminUserCreationForm(forms.ModelForm):
+    password1 = forms.CharField(label="Пароль", widget=forms.PasswordInput)
+    password2 = forms.CharField(label="Повтор пароля", widget=forms.PasswordInput)
+
+    class Meta:
+        model = User
+        fields = ("email", "name", "surname")
+
+    def clean_password2(self):
+        password1 = self.cleaned_data.get("password1")
+        password2 = self.cleaned_data.get("password2")
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError("Пароли не совпадают.")
+        return password2
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data["password1"])
+        if commit:
+            user.save()
+        return user
+
+
+class AdminUserChangeForm(ProfileForm):
+    password = ReadOnlyPasswordHashField(label="Пароль")
+
+    class Meta(ProfileForm.Meta):
+        fields = ProfileForm.Meta.fields + [
+            "email",
+            "password",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+            "groups",
+            "user_permissions",
+            "favorites",
+        ]
 

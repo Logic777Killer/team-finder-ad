@@ -1,8 +1,10 @@
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
-from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+
+from common.constants import USERS_PER_PAGE
+from common.services import paginate_queryset
 
 from .forms import LoginForm, ProfileForm, RegisterForm, UserPasswordChangeForm
 
@@ -13,10 +15,10 @@ User = get_user_model()
 def register(request):
     form = RegisterForm(request.POST or None)
 
-    if request.method == "POST" and form.is_valid():
+    if form.is_valid():
         user = form.save()
         login(request, user)
-        return redirect("/projects/list/")
+        return redirect("projects:project_list")
 
     return render(request, "users/register.html", {"form": form})
 
@@ -24,16 +26,16 @@ def register(request):
 def login_view(request):
     form = LoginForm(request.POST or None, request=request)
 
-    if request.method == "POST" and form.is_valid():
+    if form.is_valid():
         login(request, form.user)
-        return redirect("/projects/list/")
+        return redirect("projects:project_list")
 
     return render(request, "users/login.html", {"form": form})
 
 
 def logout_view(request):
     logout(request)
-    return redirect("/projects/list/")
+    return redirect("projects:project_list")
 
 
 def profile_detail(request, user_id):
@@ -45,9 +47,9 @@ def profile_detail(request, user_id):
 def edit_profile(request):
     form = ProfileForm(request.POST or None, request.FILES or None, instance=request.user)
 
-    if request.method == "POST" and form.is_valid():
+    if form.is_valid():
         form.save()
-        return redirect(f"/users/{request.user.id}/")
+        return redirect("users:profile_detail", user_id=request.user.id)
 
     return render(request, "users/edit_profile.html", {"form": form})
 
@@ -56,16 +58,16 @@ def edit_profile(request):
 def change_password(request):
     form = UserPasswordChangeForm(request.user, request.POST or None)
 
-    if request.method == "POST" and form.is_valid():
+    if form.is_valid():
         form.save()
         update_session_auth_hash(request, request.user)
-        return redirect(f"/users/{request.user.id}/")
+        return redirect("users:profile_detail", user_id=request.user.id)
 
     return render(request, "users/change_password.html", {"form": form})
 
 
 def participants(request):
-    queryset = User.objects.filter(is_active=True).order_by("id")
+    queryset = User.objects.filter(is_active=True).order_by("-date_joined")
     active_filter = request.GET.get("filter") if request.user.is_authenticated else None
 
     if active_filter == "owners-of-favorite-projects":
@@ -79,7 +81,7 @@ def participants(request):
     else:
         active_filter = None
 
-    page = Paginator(queryset.distinct(), 12).get_page(request.GET.get("page"))
+    page = paginate_queryset(request, queryset.distinct(), USERS_PER_PAGE)
     return render(
         request,
         "users/participants.html",
