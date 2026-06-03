@@ -181,7 +181,7 @@ http://127.0.0.1:8000/admin/
 
 ## Автор
 
-Logic777Killer
+Копий Илья
 
 - GitHub: [https://github.com/Logic777Killer](https://github.com/Logic777Killer)
 - Email: ilyakopiy@gmail.com
